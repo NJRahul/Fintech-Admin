@@ -32,12 +32,15 @@ const roleCols = ['Teller','KYC Officer','Credit Officer','Fraud Analyst','Colle
 export function StaffAdmin() {
   const [staff, setStaff]       = useState<any[]>(FB_STAFF);
   const [search, setSearch]     = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
   const [tab, setTab]           = useState<'staff'|'roles'|'permissions'>('staff');
   const [loading, setLoading]   = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [editTarget, setEditTarget] = useState<any>(null);
   const [saving, setSaving]     = useState(false);
   const [togglingId, setTogglingId] = useState<string|null>(null);
   const [form, setForm]         = useState({ first:'', last:'', email:'', role:'Credit Officer', branch:'014 Mumbai Andheri' });
+  const [editForm, setEditForm] = useState({ first:'', last:'', email:'', role:'', branch:'' });
 
   const load = () => {
     setLoading(true);
@@ -46,10 +49,11 @@ export function StaffAdmin() {
   useEffect(load, []);
 
   const filtered = staff.filter(s =>
-    s.name?.toLowerCase().includes(search.toLowerCase()) ||
-    s.id?.toLowerCase().includes(search.toLowerCase()) ||
-    s.role?.toLowerCase().includes(search.toLowerCase()) ||
-    s.email?.toLowerCase().includes(search.toLowerCase())
+    (statusFilter==='All' || s.status===statusFilter) &&
+    (s.name?.toLowerCase().includes(search.toLowerCase()) ||
+     s.id?.toLowerCase().includes(search.toLowerCase()) ||
+     s.role?.toLowerCase().includes(search.toLowerCase()) ||
+     s.email?.toLowerCase().includes(search.toLowerCase()))
   );
 
   const create = async () => {
@@ -60,6 +64,22 @@ export function StaffAdmin() {
       setStaff(prev => [member, ...prev]);
       setShowModal(false);
       setForm({ first:'', last:'', email:'', role:'Credit Officer', branch:'014 Mumbai Andheri' });
+    } finally { setSaving(false); }
+  };
+
+  const openEdit = (member: any) => {
+    const [first, ...rest] = (member.name||'').split(' ');
+    setEditForm({ first, last:rest.join(' '), email:member.email||'', role:member.role||'Credit Officer', branch:member.branch||'014 Mumbai Andheri' });
+    setEditTarget(member);
+  };
+
+  const saveEdit = async () => {
+    if (!editTarget) return;
+    setSaving(true);
+    try {
+      const updated = await api(`/staff/${editTarget.id}`, 'PUT', { name:`${editForm.first} ${editForm.last}`, email:editForm.email, role:editForm.role, branch:editForm.branch });
+      setStaff(prev => prev.map(s => s.id===editTarget.id ? updated : s));
+      setEditTarget(null);
     } finally { setSaving(false); }
   };
 
@@ -84,7 +104,7 @@ export function StaffAdmin() {
       {tab==='staff' && (
         <Card>
           <TableToolbar search={search} onSearch={setSearch} placeholder="Name · EMP ID · role · email…"
-            filters={<div className="flex items-center gap-2">{['All','Active','Inactive'].map((f,i)=><button key={f} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${i===0?C.blue600:C.gray300}`, backgroundColor:i===0?C.blue50:'#fff', color:i===0?C.blue600:C.gray700 }}>{f}</button>)}</div>}
+            filters={<div className="flex items-center gap-2">{['All','Active','Inactive'].map((f)=><button key={f} onClick={()=>setStatusFilter(f)} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${f===statusFilter?C.blue600:C.gray300}`, backgroundColor:f===statusFilter?C.blue50:'#fff', color:f===statusFilter?C.blue600:C.gray700 }}>{f}</button>)}</div>}
           />
           <div className="table-scroll-wrap">
           <table className="w-full" style={{ borderCollapse:'collapse', minWidth:900 }}>
@@ -111,7 +131,7 @@ export function StaffAdmin() {
                   <Td right><span className="tabular" style={{ fontWeight:600, color:C.gray900 }}>{s.actions_30d}</span></Td>
                   <Td right>
                     <div style={{ display:"inline-flex", alignItems:"center", gap:8, flexShrink:0, whiteSpace:"nowrap" }}>
-                      <CompactBtn><Edit size={12} strokeWidth={2} style={{ display:'inline', marginRight:4 }}/>Edit</CompactBtn>
+                      <CompactBtn onClick={()=>openEdit(s)}><Edit size={12} strokeWidth={2} style={{ display:'inline', marginRight:4 }}/>Edit</CompactBtn>
                       <button onClick={()=>toggle(s)} disabled={togglingId===s.id} className="rounded flex items-center gap-1" style={{ height:32, padding:'0 10px', backgroundColor:s.status==='Active'?C.danger600:'#fff', border:`1px solid ${s.status==='Active'?C.danger600:C.gray300}`, color:s.status==='Active'?'#fff':C.success600, fontSize:12, fontWeight:500 }}>
                         {togglingId===s.id?<RefreshCw size={12} className="animate-spin"/>:s.status==='Active'?<><Trash2 size={12} style={{ display:'inline', marginRight:4 }}/>Deactivate</>:'Reactivate'}
                       </button>
@@ -163,6 +183,33 @@ export function StaffAdmin() {
             </tbody>
           </table>
         </Card>
+      )}
+
+      {editTarget && (
+        <div style={{ position:'fixed', inset:0, backgroundColor:'rgba(26,31,41,0.4)', zIndex:100, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ backgroundColor:'#fff', borderRadius:10, width:520, boxShadow:'0 12px 24px rgba(16,24,40,0.14)', overflow:'hidden' }}>
+            <div className="flex items-center justify-between" style={{ padding:'20px 24px', borderBottom:`1px solid ${C.gray200}` }}>
+              <h2 style={{ fontSize:18, fontWeight:600, color:C.gray900 }}>Edit staff member</h2>
+              <button onClick={()=>setEditTarget(null)} style={{ color:C.gray500 }}><X size={20} strokeWidth={1.5}/></button>
+            </div>
+            <div style={{ padding:24 }} className="flex flex-col gap-4">
+              <div className="grid gap-4" style={{ gridTemplateColumns:'1fr 1fr' }}>
+                {[{label:'First name',key:'first',placeholder:'Ananya'},{label:'Last name',key:'last',placeholder:'Kapoor'}].map(({label,key,placeholder})=>(
+                  <div key={key}><label style={{ display:'block', fontSize:12, fontWeight:600, color:C.gray700, marginBottom:4 }}>{label}</label><input value={(editForm as any)[key]} onChange={e=>setEditForm(f=>({...f,[key]:e.target.value}))} placeholder={placeholder} className="w-full rounded outline-none" style={{ height:40, padding:'0 12px', border:`1px solid ${C.gray300}`, fontSize:14, backgroundColor:'#fff' }}/></div>
+                ))}
+              </div>
+              <div><label style={{ display:'block', fontSize:12, fontWeight:600, color:C.gray700, marginBottom:4 }}>Corporate email</label><input value={editForm.email} onChange={e=>setEditForm(f=>({...f,email:e.target.value}))} type="email" className="w-full rounded outline-none" style={{ height:40, padding:'0 12px', border:`1px solid ${C.gray300}`, fontSize:14, backgroundColor:'#fff' }}/></div>
+              <div><label style={{ display:'block', fontSize:12, fontWeight:600, color:C.gray700, marginBottom:4 }}>Role</label><select value={editForm.role} onChange={e=>setEditForm(f=>({...f,role:e.target.value}))} className="w-full rounded outline-none" style={{ height:40, padding:'0 12px', border:`1px solid ${C.gray300}`, fontSize:14, backgroundColor:'#fff' }}>{roles.map(r=><option key={r.role}>{r.role}</option>)}</select></div>
+              <div><label style={{ display:'block', fontSize:12, fontWeight:600, color:C.gray700, marginBottom:4 }}>Branch</label><select value={editForm.branch} onChange={e=>setEditForm(f=>({...f,branch:e.target.value}))} className="w-full rounded outline-none" style={{ height:40, padding:'0 12px', border:`1px solid ${C.gray300}`, fontSize:14, backgroundColor:'#fff' }}>{['014 Mumbai Andheri','022 Delhi Connaught Place','031 Chennai Anna Nagar','044 Bangalore Indiranagar'].map(b=><option key={b}>{b}</option>)}</select></div>
+            </div>
+            <div className="flex items-center justify-end gap-3" style={{ padding:'16px 24px', borderTop:`1px solid ${C.gray200}` }}>
+              <button onClick={()=>setEditTarget(null)} className="rounded" style={{ height:40, padding:'0 16px', border:`1px solid ${C.gray300}`, backgroundColor:'#fff', fontSize:14, color:C.gray700 }}>Cancel</button>
+              <button onClick={saveEdit} disabled={saving} className="rounded flex items-center gap-2" style={{ height:40, padding:'0 16px', backgroundColor:C.blue600, color:'#fff', fontSize:14, fontWeight:600 }}>
+                {saving?<RefreshCw size={14} className="animate-spin"/>:null} Save changes
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showModal && (

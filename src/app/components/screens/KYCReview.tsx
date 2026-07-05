@@ -500,6 +500,7 @@ export function KYCReview() {
   const [selected, setSelected] = useState<any>(null);
   const [view, setView]     = useState<'list'|'compare'>('list');
   const [loading, setLoading] = useState(false);
+  const [chipFilter, setChipFilter] = useState('All');
 
   const load = () => {
     setLoading(true);
@@ -507,7 +508,14 @@ export function KYCReview() {
   };
   useEffect(load, []);
 
-  const filtered = queue.filter(r=>r.name?.toLowerCase().includes(search.toLowerCase())||r.cif?.toLowerCase().includes(search.toLowerCase()));
+  const filtered = queue.filter(r => {
+    const matchSearch = r.name?.toLowerCase().includes(search.toLowerCase()) || r.cif?.toLowerCase().includes(search.toLowerCase());
+    const matchChip = chipFilter==='All' ||
+      (chipFilter==='High risk' && r.risk==='High') ||
+      (chipFilter==='Submitted' && r.status==='Submitted') ||
+      (chipFilter==='In Review' && r.status==='In Review');
+    return matchSearch && matchChip;
+  });
 
   if (view==='compare'&&selected) return <CompareView entry={selected} onBack={()=>{setView('list');setSelected(null);}} onDone={updated=>{setQueue(q=>q.map(e=>e.cif===updated.cif?updated:e));setView('list');setSelected(null);}}/>;
 
@@ -529,8 +537,8 @@ export function KYCReview() {
       </div>
       <Card>
         <TableToolbar search={search} onSearch={setSearch} placeholder="Name or CIF…" filters={
-          <div className="flex items-center gap-2">{['All','High risk','Submitted','In Review'].map((f,i)=>(
-            <button key={f} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${i===0?C.blue600:C.gray300}`, backgroundColor:i===0?C.blue50:'#fff', color:i===0?C.blue600:C.gray700 }}>{f}</button>
+          <div className="flex items-center gap-2">{['All','High risk','Submitted','In Review'].map((f)=>(
+            <button key={f} onClick={()=>setChipFilter(f)} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${f===chipFilter?C.blue600:C.gray300}`, backgroundColor:f===chipFilter?C.blue50:'#fff', color:f===chipFilter?C.blue600:C.gray700 }}>{f}</button>
           ))}</div>
         }/>
         <table className="w-full" style={{ borderCollapse:'collapse' }}>

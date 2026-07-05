@@ -29,10 +29,29 @@ export function Reports() {
   const [generating, setGenerating] = useState(false);
   const [generatedId, setGeneratedId] = useState('');
   const [loading, setLoading]     = useState(true);
+  const [catalogSearch, setCatalogSearch] = useState('');
 
   useEffect(() => {
     api('/reports').then(setReports).catch(()=>{}).finally(()=>setLoading(false));
   }, []);
+
+  const downloadReport = (name: string, category: string, dateFrom: string, dateTo: string) => {
+    const rows = [
+      ['Report', 'Category', 'Date From', 'Date To', 'Branch', 'Format', 'Generated'],
+      [name, category, dateFrom, dateTo, branch, format, new Date().toISOString()],
+    ];
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type:'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${name.replace(/\s+/g,'-')}-${dateFrom}-to-${dateTo}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const filteredCatalog = catalog.filter(r =>
+    r.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
+    r.desc.toLowerCase().includes(catalogSearch.toLowerCase())
+  );
 
   const generate = async () => {
     if (!selected) return;
@@ -49,11 +68,11 @@ export function Reports() {
       <div className="grid gap-4" style={{ gridTemplateColumns:'1fr 420px' }}>
         <Card style={{ padding:0 }}>
           <div style={{ padding:'12px 16px', borderBottom:`1px solid ${C.gray200}` }}>
-            <input placeholder="Search reports…" className="w-full outline-none rounded" style={{ height:40, padding:'0 12px', border:`1px solid ${C.gray300}`, fontSize:14, backgroundColor:'#fff' }}/>
+            <input value={catalogSearch} onChange={e=>setCatalogSearch(e.target.value)} placeholder="Search reports…" className="w-full outline-none rounded" style={{ height:40, padding:'0 12px', border:`1px solid ${C.gray300}`, fontSize:14, backgroundColor:'#fff' }}/>
           </div>
-          {catalog.map((r,i)=>(
+          {filteredCatalog.map((r,i)=>(
             <div key={r.id} onClick={()=>{setSelected(r);setGeneratedId('');}}
-              style={{ padding:'16px 20px', borderBottom:i<catalog.length-1?`1px solid ${C.gray200}`:'none', cursor:'pointer', backgroundColor:selected?.id===r.id?C.blue50:'#fff', borderLeft:`4px solid ${selected?.id===r.id?C.blue600:'transparent'}` }}
+              style={{ padding:'16px 20px', borderBottom:i<filteredCatalog.length-1?`1px solid ${C.gray200}`:'none', cursor:'pointer', backgroundColor:selected?.id===r.id?C.blue50:'#fff', borderLeft:`4px solid ${selected?.id===r.id?C.blue600:'transparent'}` }}
               onMouseEnter={e=>{if(selected?.id!==r.id)e.currentTarget.style.backgroundColor=C.gray50}} onMouseLeave={e=>{e.currentTarget.style.backgroundColor=selected?.id===r.id?C.blue50:'#fff'}}>
               <div className="flex items-start justify-between mb-1">
                 <div><div style={{ fontSize:14, fontWeight:600, color:C.gray900 }}>{r.name}</div><div className="tabular" style={{ fontSize:11, color:C.gray500 }}>{r.id}</div></div>
@@ -88,7 +107,7 @@ export function Reports() {
                   <div style={{ padding:16, borderRadius:8, backgroundColor:'#E9F5EE', border:`1px solid ${C.success600}30` }}>
                     <div className="flex items-center gap-2 mb-2"><CheckCircle size={18} strokeWidth={2} color={C.success600}/><span style={{ fontSize:14, fontWeight:600, color:C.success600 }}>Report ready</span></div>
                     <div className="tabular" style={{ fontSize:12, color:C.gray500, marginBottom:10 }}>{generatedId}</div>
-                    <button className="rounded flex items-center gap-2 w-full justify-center" style={{ height:40, backgroundColor:C.success600, color:'#fff', fontSize:14, fontWeight:600 }}><Download size={16} strokeWidth={2}/> Download report</button>
+                    <button onClick={()=>downloadReport(selected.name,selected.category,dateFrom,dateTo)} className="rounded flex items-center gap-2 w-full justify-center" style={{ height:40, backgroundColor:C.success600, color:'#fff', fontSize:14, fontWeight:600 }}><Download size={16} strokeWidth={2}/> Download report</button>
                   </div>
                 ) : (
                   <button onClick={generate} disabled={generating} className="rounded flex items-center justify-center gap-2 w-full" style={{ height:44, backgroundColor:generating?C.gray300:C.blue600, color:'#fff', fontSize:14, fontWeight:600 }}>
@@ -112,7 +131,7 @@ export function Reports() {
               <div key={r.id} style={{ padding:'12px 20px', borderBottom:i<Math.min(reports.length,5)-1?`1px solid ${C.gray200}`:'none' }}>
                 <div className="flex items-start justify-between mb-1">
                   <div style={{ fontSize:13, fontWeight:600, color:C.gray900 }}>{r.name}</div>
-                  <button className="rounded flex items-center gap-1" style={{ height:28, padding:'0 10px', backgroundColor:C.blue50, color:C.blue600, fontSize:12, fontWeight:600 }}><Download size={12} strokeWidth={2}/> .xlsx</button>
+                  <button onClick={()=>downloadReport(r.name, r.category||'Report', r.date_from||dateFrom, r.date_to||dateTo)} className="rounded flex items-center gap-1" style={{ height:28, padding:'0 10px', backgroundColor:C.blue50, color:C.blue600, fontSize:12, fontWeight:600 }}><Download size={12} strokeWidth={2}/> .csv</button>
                 </div>
                 <div className="tabular flex items-center gap-2" style={{ fontSize:12, color:C.gray500 }}><span>{fmtDt(r.generated_at)}</span><span style={{ color:C.gray300 }}>·</span><span>{r.size_mb} MB</span></div>
               </div>

@@ -19,6 +19,7 @@ export function FraudAlerts() {
   const [resolving, setResolving] = useState(false);
   const [notes, setNotes]     = useState('');
   const [copied, setCopied]   = useState(false);
+  const [chipFilter, setChipFilter] = useState('All');
 
   const load = () => {
     setLoading(true);
@@ -26,11 +27,17 @@ export function FraudAlerts() {
   };
   useEffect(load, []);
 
-  const filtered = alerts.filter(a =>
-    a.customer?.toLowerCase().includes(search.toLowerCase()) ||
-    a.id?.toLowerCase().includes(search.toLowerCase()) ||
-    a.rule?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = alerts.filter(a => {
+    const matchSearch = a.customer?.toLowerCase().includes(search.toLowerCase()) ||
+      a.id?.toLowerCase().includes(search.toLowerCase()) ||
+      a.rule?.toLowerCase().includes(search.toLowerCase());
+    const matchChip = chipFilter==='All' ||
+      (chipFilter==='Critical' && a.severity==='Critical') ||
+      (chipFilter==='High' && a.severity==='High') ||
+      (chipFilter==='Open' && a.status==='Open') ||
+      (chipFilter==='Cleared' && a.status==='Cleared');
+    return matchSearch && matchChip;
+  });
 
   const resolve = async (outcome: string) => {
     if (!selected) return;
@@ -143,7 +150,7 @@ export function FraudAlerts() {
       </div>
       <Card>
         <TableToolbar search={search} onSearch={setSearch} placeholder="Alert ID · customer · rule…"
-          filters={<div className="flex items-center gap-2">{['All','Critical','High','Open','Cleared'].map((f,i)=><button key={f} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${i===0?C.blue600:C.gray300}`, backgroundColor:i===0?C.blue50:'#fff', color:i===0?C.blue600:C.gray700 }}>{f}</button>)}</div>}
+          filters={<div className="flex items-center gap-2">{['All','Critical','High','Open','Cleared'].map((f)=><button key={f} onClick={()=>setChipFilter(f)} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${f===chipFilter?C.blue600:C.gray300}`, backgroundColor:f===chipFilter?C.blue50:'#fff', color:f===chipFilter?C.blue600:C.gray700 }}>{f}</button>)}</div>}
         />
         <div className="table-scroll-wrap">
           <table className="w-full" style={{ borderCollapse:'collapse', minWidth:900 }}>

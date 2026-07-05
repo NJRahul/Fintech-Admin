@@ -17,6 +17,9 @@ export function Collections() {
   const [note, setNote]               = useState('');
   const [loading, setLoading]         = useState(false);
   const [logging, setLogging]         = useState(false);
+  const [actioning, setActioning]     = useState<string|null>(null);
+  const [showReassign, setShowReassign] = useState(false);
+  const [reassignAgent, setReassignAgent] = useState('');
 
   const load = () => {
     setLoading(true);
@@ -27,6 +30,27 @@ export function Collections() {
   const buckets = ['1-30','31-60','61-90','90+'];
   const grouped: Record<string,any[]> = {};
   buckets.forEach(b => { grouped[b] = collections.filter(c=>c.bucket===b); });
+
+  const quickAction = async (outcome: string) => {
+    if (!selected) return;
+    setActioning(outcome);
+    try {
+      const updated = await api(`/collections/${selected.loan_id}/contact`, 'POST', { agent:'A. Singh', channel:'Phone', outcome, note:'' });
+      setCollections(prev => prev.map(c=>c.loan_id===selected.loan_id?updated:c));
+      setSelected(updated);
+    } finally { setActioning(null); }
+  };
+
+  const reassign = async () => {
+    if (!selected || !reassignAgent) return;
+    setActioning('reassign');
+    try {
+      const updated = await api(`/collections/${selected.loan_id}/contact`, 'POST', { agent:reassignAgent, channel:'Internal', outcome:'Agent reassigned', note:`Reassigned from ${selected.agent} to ${reassignAgent}` });
+      setCollections(prev => prev.map(c=>c.loan_id===selected.loan_id?updated:c));
+      setSelected(updated);
+      setShowReassign(false); setReassignAgent('');
+    } finally { setActioning(null); }
+  };
 
   const logContact = async () => {
     if (!selected||!outcome) return;
@@ -150,10 +174,30 @@ export function Collections() {
             <Card style={{ padding:20 }}>
               <div style={{ fontSize:15, fontWeight:600, color:C.gray900, marginBottom:12 }}>Actions</div>
               <div className="flex flex-col gap-2">
-                <button className="rounded w-full flex items-center justify-center gap-2" style={{ height:40, backgroundColor:C.warning50, border:`1px solid ${C.warning600}40`, color:C.warning600, fontSize:14, fontWeight:600 }}><MessageSquare size={16} strokeWidth={1.5}/> Review restructuring request</button>
-                <button className="rounded w-full flex items-center justify-center gap-2" style={{ height:40, border:`1px solid ${C.gray300}`, backgroundColor:'#fff', color:C.gray900, fontSize:14, fontWeight:500 }}><CheckCircle size={16} strokeWidth={1.5}/> Mark payment received</button>
-                <button className="rounded w-full flex items-center justify-center gap-2" style={{ height:40, backgroundColor:C.danger50, border:`1px solid ${C.danger600}40`, color:C.danger600, fontSize:14, fontWeight:600 }}><AlertTriangle size={16} strokeWidth={1.5}/> Escalate to legal</button>
-                <button className="rounded w-full flex items-center justify-center gap-2" style={{ height:40, border:`1px solid ${C.gray300}`, backgroundColor:'#fff', color:C.gray700, fontSize:14, fontWeight:500 }}><ArrowRight size={16} strokeWidth={1.5}/> Reassign agent</button>
+                <button onClick={()=>selected&&quickAction('Restructuring requested')} disabled={!selected||actioning==='Restructuring requested'} className="rounded w-full flex items-center justify-center gap-2" style={{ height:40, backgroundColor:C.warning50, border:`1px solid ${C.warning600}40`, color:C.warning600, fontSize:14, fontWeight:600 }}>
+                  {actioning==='Restructuring requested'?<RefreshCw size={16} className="animate-spin"/>:<MessageSquare size={16} strokeWidth={1.5}/>} Review restructuring request
+                </button>
+                <button onClick={()=>selected&&quickAction('Payment received')} disabled={!selected||actioning==='Payment received'} className="rounded w-full flex items-center justify-center gap-2" style={{ height:40, border:`1px solid ${C.gray300}`, backgroundColor:'#fff', color:C.gray900, fontSize:14, fontWeight:500 }}>
+                  {actioning==='Payment received'?<RefreshCw size={16} className="animate-spin"/>:<CheckCircle size={16} strokeWidth={1.5}/>} Mark payment received
+                </button>
+                <button onClick={()=>selected&&quickAction('Escalated to legal')} disabled={!selected||actioning==='Escalated to legal'} className="rounded w-full flex items-center justify-center gap-2" style={{ height:40, backgroundColor:C.danger50, border:`1px solid ${C.danger600}40`, color:C.danger600, fontSize:14, fontWeight:600 }}>
+                  {actioning==='Escalated to legal'?<RefreshCw size={16} className="animate-spin"/>:<AlertTriangle size={16} strokeWidth={1.5}/>} Escalate to legal
+                </button>
+                <button onClick={()=>setShowReassign(!showReassign)} disabled={!selected} className="rounded w-full flex items-center justify-center gap-2" style={{ height:40, border:`1px solid ${C.gray300}`, backgroundColor:'#fff', color:C.gray700, fontSize:14, fontWeight:500 }}>
+                  <ArrowRight size={16} strokeWidth={1.5}/> Reassign agent
+                </button>
+                {showReassign && (
+                  <div style={{ padding:12, borderRadius:8, border:`1px solid ${C.gray200}`, backgroundColor:C.gray50 }}>
+                    <label style={{ display:'block', fontSize:12, fontWeight:600, color:C.gray700, marginBottom:4 }}>Select agent</label>
+                    <select value={reassignAgent} onChange={e=>setReassignAgent(e.target.value)} className="w-full rounded outline-none" style={{ height:36, padding:'0 10px', border:`1px solid ${C.gray300}`, fontSize:13, backgroundColor:'#fff', marginBottom:8 }}>
+                      <option value="">Choose agent…</option>
+                      {['A. Singh','B. Patel','C. Rao','D. Kumar','E. Sharma'].map(a=><option key={a}>{a}</option>)}
+                    </select>
+                    <button onClick={reassign} disabled={!reassignAgent||actioning==='reassign'} className="rounded w-full flex items-center justify-center gap-2" style={{ height:34, backgroundColor:reassignAgent?C.blue600:C.gray300, color:'#fff', fontSize:13, fontWeight:600 }}>
+                      {actioning==='reassign'?<RefreshCw size={14} className="animate-spin"/>:null} Confirm reassign
+                    </button>
+                  </div>
+                )}
               </div>
             </Card>
           </div>

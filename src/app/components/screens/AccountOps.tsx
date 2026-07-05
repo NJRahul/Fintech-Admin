@@ -18,6 +18,7 @@ export function AccountOps() {
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [loading, setLoading]   = useState(false);
   const [freezing, setFreezing] = useState<string|null>(null);
+  const [chipFilter, setChipFilter] = useState('All');
 
   const load = () => {
     setLoading(true);
@@ -25,12 +26,18 @@ export function AccountOps() {
   };
   useEffect(load, []);
 
-  const filtered = accounts.filter(a =>
-    a.no?.toLowerCase().includes(search.toLowerCase()) ||
-    a.full?.toLowerCase().includes(search.toLowerCase()) ||
-    a.cif?.toLowerCase().includes(search.toLowerCase()) ||
-    a.type?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = accounts.filter(a => {
+    const matchSearch = a.no?.toLowerCase().includes(search.toLowerCase()) ||
+      a.full?.toLowerCase().includes(search.toLowerCase()) ||
+      a.cif?.toLowerCase().includes(search.toLowerCase()) ||
+      a.type?.toLowerCase().includes(search.toLowerCase());
+    const matchChip = chipFilter==='All' ||
+      (chipFilter==='Savings' && a.type==='Savings') ||
+      (chipFilter==='Current' && a.type==='Current') ||
+      (chipFilter==='Loan' && a.type==='Loan') ||
+      (chipFilter==='Frozen' && a.status==='Frozen');
+    return matchSearch && matchChip;
+  });
 
   const openLedger = async (acc: any) => {
     setSelected(acc); setShowLedger(true); setLedgerLoading(true);
@@ -65,7 +72,7 @@ export function AccountOps() {
 
       <Card>
         <TableToolbar search={search} onSearch={setSearch} placeholder="Account no. · type · CIF…"
-          filters={<div className="flex items-center gap-2">{['All','Savings','Current','Loan','Frozen'].map((f,i)=><button key={f} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${i===0?C.blue600:C.gray300}`, backgroundColor:i===0?C.blue50:'#fff', color:i===0?C.blue600:C.gray700 }}>{f}</button>)}</div>}
+          filters={<div className="flex items-center gap-2">{['All','Savings','Current','Loan','Frozen'].map((f)=><button key={f} onClick={()=>setChipFilter(f)} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${f===chipFilter?C.blue600:C.gray300}`, backgroundColor:f===chipFilter?C.blue50:'#fff', color:f===chipFilter?C.blue600:C.gray700 }}>{f}</button>)}</div>}
         />
         <table className="w-full" style={{ borderCollapse:'collapse' }}>
           <thead><tr><Th>Account</Th><Th>CIF</Th><Th>Type</Th><Th>IFSC</Th><Th>Branch</Th><Th>Status</Th><Th right>Balance</Th><Th></Th></tr></thead>

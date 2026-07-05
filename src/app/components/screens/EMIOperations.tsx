@@ -9,12 +9,60 @@ import { FB_EMIS } from '../../lib/fallback';
 
 const sV: Record<string,any> = { Upcoming:'info',Paid:'success',Overdue:'danger',Restructured:'warning' };
 
+function CampaignComposer({ overdueCt, onSchedule, scheduling, scheduled }: { overdueCt: number; onSchedule: (a:string,c:string,m:string,s:string)=>void; scheduling: boolean; scheduled: boolean }) {
+  const [audience, setAudience] = useState(`Overdue — 1-3 days (${overdueCt} loans)`);
+  const [channel, setChannel]   = useState('SMS + Push notification');
+  const [message, setMessage]   = useState('Dear {{name}}, your EMI of ₹{{amount}} for loan {{loan_id}} is due on {{due_date}}. Please ensure funds are available.');
+  const [scheduleAt, setScheduleAt] = useState('');
+
+  return (
+    <Card style={{ padding:24 }}>
+      <div style={{ fontSize:16, fontWeight:600, color:C.gray900, marginBottom:20 }}>Reminder campaign composer</div>
+      {scheduled && (
+        <div style={{ padding:12, borderRadius:8, backgroundColor:'#E9F5EE', border:`1px solid ${C.success600}30`, display:'flex', alignItems:'center', gap:8, marginBottom:20 }}>
+          <CheckCircle size={16} strokeWidth={2} color={C.success600}/>
+          <span style={{ fontSize:13, fontWeight:600, color:C.success600 }}>Campaign scheduled! It will run at the configured time.</span>
+        </div>
+      )}
+      <div className="grid gap-4" style={{ gridTemplateColumns:'1fr 1fr' }}>
+        <div><label style={{ display:'block', fontSize:12, fontWeight:600, color:C.gray700, marginBottom:4 }}>Audience</label>
+          <select value={audience} onChange={e=>setAudience(e.target.value)} className="w-full rounded outline-none" style={{ height:40, padding:'0 12px', border:`1px solid ${C.gray300}`, fontSize:14, backgroundColor:'#fff' }}>
+            <option>{`Overdue — 1-3 days (${overdueCt} loans)`}</option>
+            <option>Upcoming — due in 3 days</option>
+          </select>
+        </div>
+        <div><label style={{ display:'block', fontSize:12, fontWeight:600, color:C.gray700, marginBottom:4 }}>Channel</label>
+          <select value={channel} onChange={e=>setChannel(e.target.value)} className="w-full rounded outline-none" style={{ height:40, padding:'0 12px', border:`1px solid ${C.gray300}`, fontSize:14, backgroundColor:'#fff' }}>
+            <option>SMS + Push notification</option>
+            <option>Email only</option>
+          </select>
+        </div>
+        <div className="col-span-2"><label style={{ display:'block', fontSize:12, fontWeight:600, color:C.gray700, marginBottom:4 }}>Message template</label>
+          <textarea value={message} onChange={e=>setMessage(e.target.value)} className="w-full rounded outline-none" style={{ padding:12, border:`1px solid ${C.gray300}`, fontSize:14, resize:'vertical', minHeight:100, backgroundColor:'#fff' }}/>
+        </div>
+        <div><label style={{ display:'block', fontSize:12, fontWeight:600, color:C.gray700, marginBottom:4 }}>Schedule</label>
+          <input type="datetime-local" value={scheduleAt} onChange={e=>setScheduleAt(e.target.value)} className="w-full rounded outline-none" style={{ height:40, padding:'0 12px', border:`1px solid ${C.gray300}`, fontSize:14, backgroundColor:'#fff' }}/>
+        </div>
+        <div className="flex items-end">
+          <button onClick={()=>onSchedule(audience,channel,message,scheduleAt)} disabled={scheduling||!scheduleAt} className="rounded flex items-center gap-2" style={{ height:40, padding:'0 20px', backgroundColor:scheduleAt?C.blue600:C.gray300, color:'#fff', fontSize:14, fontWeight:500 }}>
+            {scheduling?<RefreshCw size={16} className="animate-spin"/>:<Send size={16} strokeWidth={1.5}/>} {scheduling?'Scheduling…':'Schedule campaign'}
+          </button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function EMIOperations() {
   const [emis, setEmis]       = useState<any[]>(FB_EMIS);
   const [search, setSearch]   = useState('');
   const [tab, setTab]         = useState<'all'|'overdue'|'upcoming'|'schedule'|'campaign'>('all');
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState<string|null>(null);
+  const [notifying, setNotifying] = useState<string|null>(null);
+  const [mandateFilter, setMandateFilter] = useState('All');
+  const [scheduling, setScheduling] = useState(false);
+  const [campaignScheduled, setCampaignScheduled] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -24,8 +72,24 @@ export function EMIOperations() {
 
   const filtered = emis.filter(e =>
     (tab==='all' || (tab==='overdue'&&e.status==='Overdue') || (tab==='upcoming'&&e.status==='Upcoming')) &&
+    (mandateFilter==='All' || e.mandate===mandateFilter) &&
     (e.name?.toLowerCase().includes(search.toLowerCase()) || e.loan_id?.toLowerCase().includes(search.toLowerCase()))
   );
+
+  const notify = async (id: string) => {
+    setNotifying(id);
+    try { await api(`/emis/${id}/status`, 'PUT', { status:'Upcoming', notified:true }); }
+    catch { /* toast shown via UI */ }
+    finally { setNotifying(null); }
+  };
+
+  const scheduleCampaign = async (audience: string, channel: string, message: string, scheduleAt: string) => {
+    setScheduling(true);
+    try {
+      await api('/reports/generate', 'POST', { name:`EMI reminder campaign — ${audience}`, category:'Operations', description:`Channel: ${channel}. Scheduled: ${scheduleAt}. Message: ${message}` });
+      setCampaignScheduled(true);
+    } finally { setScheduling(false); }
+  };
 
   const markPaid = async (id: string) => {
     setUpdating(id);
@@ -41,12 +105,13 @@ export function EMIOperations() {
 
   return (
     <PageShell title="EMI operations" subtitle="Monitor EMI schedule, missed payments, and send reminder campaigns."
-      actions={<button className="rounded" style={{ height:40, padding:'0 16px', backgroundColor:C.blue600, color:'#fff', fontSize:14, fontWeight:500 }}>+ New campaign</button>}
+      actions={<button onClick={()=>setTab('campaign')} className="rounded" style={{ height:40, padding:'0 16px', backgroundColor:C.blue600, color:'#fff', fontSize:14, fontWeight:500 }}>+ New campaign</button>}
     >
       <div className="grid gap-4 mb-6" style={{ gridTemplateColumns:'repeat(4,1fr)' }}>
         {[{label:'Outstanding EMIs',value:fmtINR(totalDue),sub:`${emis.filter(e=>e.status!=='Paid').length} EMIs`,color:C.gray900},{label:'Overdue',value:String(overdueCt),sub:'require action',color:C.danger600},{label:'Paid',value:String(paidCt),sub:'this period',color:C.success600},{label:'Restructured',value:String(emis.filter(e=>e.status==='Restructured').length),sub:'modified',color:C.warning600}].map((k,i)=>(
           <Card key={i} style={{ padding:20 }}><div style={{ fontSize:12, fontWeight:600, letterSpacing:'0.03em', textTransform:'uppercase', color:C.gray500, marginBottom:6 }}>{k.label}</div><div className="tabular" style={{ fontSize:i===0?18:28, fontWeight:700, color:k.color }}>{loading?'…':k.value}</div><div style={{ fontSize:12, color:C.gray500, marginTop:4 }}>{k.sub}</div></Card>
         ))}
+        {campaignScheduled&&<div style={{ gridColumn:'1/-1', padding:12, borderRadius:8, backgroundColor:'#E9F5EE', border:`1px solid ${C.success600}30`, display:'flex', alignItems:'center', gap:8 }}><CheckCircle size={16} strokeWidth={2} color={C.success600}/><span style={{ fontSize:13, fontWeight:600, color:C.success600 }}>Campaign scheduled successfully.</span><button onClick={()=>setCampaignScheduled(false)} style={{ marginLeft:'auto', fontSize:12, color:C.gray500 }}>Dismiss</button></div>}
       </div>
 
       <div className="flex mb-4" style={{ borderBottom:`1px solid ${C.gray200}` }}>
@@ -56,16 +121,7 @@ export function EMIOperations() {
       </div>
 
       {tab==='campaign' ? (
-        <Card style={{ padding:24 }}>
-          <div style={{ fontSize:16, fontWeight:600, color:C.gray900, marginBottom:20 }}>Reminder campaign composer</div>
-          <div className="grid gap-4" style={{ gridTemplateColumns:'1fr 1fr' }}>
-            <div><label style={{ display:'block', fontSize:12, fontWeight:600, color:C.gray700, marginBottom:4 }}>Audience</label><select className="w-full rounded outline-none" style={{ height:40, padding:'0 12px', border:`1px solid ${C.gray300}`, fontSize:14, backgroundColor:'#fff' }}><option>Overdue — 1-3 days ({overdueCt} loans)</option><option>Upcoming — due in 3 days</option></select></div>
-            <div><label style={{ display:'block', fontSize:12, fontWeight:600, color:C.gray700, marginBottom:4 }}>Channel</label><select className="w-full rounded outline-none" style={{ height:40, padding:'0 12px', border:`1px solid ${C.gray300}`, fontSize:14, backgroundColor:'#fff' }}><option>SMS + Push notification</option><option>Email only</option></select></div>
-            <div className="col-span-2"><label style={{ display:'block', fontSize:12, fontWeight:600, color:C.gray700, marginBottom:4 }}>Message template</label><textarea className="w-full rounded outline-none" style={{ padding:12, border:`1px solid ${C.gray300}`, fontSize:14, resize:'vertical', minHeight:100, backgroundColor:'#fff' }} defaultValue="Dear {{name}}, your EMI of ₹{{amount}} for loan {{loan_id}} is due on {{due_date}}. Please ensure funds are available."/></div>
-            <div><label style={{ display:'block', fontSize:12, fontWeight:600, color:C.gray700, marginBottom:4 }}>Schedule</label><input type="datetime-local" className="w-full rounded outline-none" style={{ height:40, padding:'0 12px', border:`1px solid ${C.gray300}`, fontSize:14, backgroundColor:'#fff' }}/></div>
-            <div className="flex items-end"><button className="rounded flex items-center gap-2" style={{ height:40, padding:'0 20px', backgroundColor:C.blue600, color:'#fff', fontSize:14, fontWeight:500 }}><Send size={16} strokeWidth={1.5}/> Schedule campaign</button></div>
-          </div>
-        </Card>
+        <CampaignComposer overdueCt={overdueCt} onSchedule={scheduleCampaign} scheduling={scheduling} scheduled={campaignScheduled}/>
       ) : tab==='schedule' ? (
         <Card>
           <div style={{ padding:'16px 20px', borderBottom:`1px solid ${C.gray200}` }}><h3 style={{ fontSize:15, fontWeight:600, color:C.gray900 }}>Amortisation — LN-2026-08780 (Sanjay Gupta)</h3><p style={{ fontSize:13, color:C.gray500, marginTop:4 }}>Home Loan · ₹38,00,000 · 9.0% p.a. · 240 months</p></div>
@@ -82,7 +138,7 @@ export function EMIOperations() {
       ) : (
         <Card>
           <TableToolbar search={search} onSearch={setSearch} placeholder="Loan ID · borrower…"
-            filters={<div className="flex items-center gap-2">{['All','NACH','SI'].map((f,i)=><button key={f} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${i===0?C.blue600:C.gray300}`, backgroundColor:i===0?C.blue50:'#fff', color:i===0?C.blue600:C.gray700 }}>{f}</button>)}</div>}
+            filters={<div className="flex items-center gap-2">{['All','NACH','SI'].map((f)=><button key={f} onClick={()=>setMandateFilter(f)} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${f===mandateFilter?C.blue600:C.gray300}`, backgroundColor:f===mandateFilter?C.blue50:'#fff', color:f===mandateFilter?C.blue600:C.gray700 }}>{f}</button>)}</div>}
           />
           <table className="w-full" style={{ borderCollapse:'collapse' }}>
             <thead><tr><Th>Loan</Th><Th>Borrower</Th><Th>Type</Th><Th right>EMI</Th><Th>Due date</Th><Th>Mandate</Th><Th>Bank</Th><Th>Status</Th><Th></Th></tr></thead>
@@ -106,7 +162,9 @@ export function EMIOperations() {
                           {updating===e.id?<RefreshCw size={12} className="animate-spin"/>:<CheckCircle size={12} strokeWidth={2}/>} Mark paid
                         </button>
                       )}
-                      <CompactBtn danger={e.status==='Overdue'}><AlertTriangle size={12} strokeWidth={2} style={{ display:'inline', marginRight:4 }}/>Notify</CompactBtn>
+                      <button onClick={()=>notify(e.id)} disabled={notifying===e.id} className="rounded flex items-center gap-1" style={{ height:32, padding:'0 10px', border:`1px solid ${e.status==='Overdue'?C.danger600:C.gray300}`, backgroundColor:e.status==='Overdue'?C.danger50:'#fff', color:e.status==='Overdue'?C.danger600:C.gray700, fontSize:12, fontWeight:500 }}>
+                          {notifying===e.id?<RefreshCw size={12} className="animate-spin"/>:<AlertTriangle size={12} strokeWidth={2}/>} Notify
+                        </button>
                     </div>
                   </Td>
                 </tr>

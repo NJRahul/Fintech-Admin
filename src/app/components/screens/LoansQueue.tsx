@@ -21,6 +21,7 @@ export function LoansQueue() {
   const [view, setView]       = useState<'queue'|'underwriting'>('queue');
   const [loading, setLoading] = useState(false);
   const [deciding, setDeciding] = useState(false);
+  const [chipFilter, setChipFilter] = useState('All');
   const [offerOpen, setOfferOpen] = useState(false);
   const [offerAmt, setOfferAmt] = useState('');
   const [offerRate, setOfferRate] = useState('');
@@ -32,7 +33,11 @@ export function LoansQueue() {
   };
   useEffect(load, []);
 
-  const filtered = loans.filter(a => a.name?.toLowerCase().includes(search.toLowerCase()) || a.id?.toLowerCase().includes(search.toLowerCase()) || a.type?.toLowerCase().includes(search.toLowerCase()));
+  const filtered = loans.filter(a => {
+    const matchSearch = a.name?.toLowerCase().includes(search.toLowerCase()) || a.id?.toLowerCase().includes(search.toLowerCase()) || a.type?.toLowerCase().includes(search.toLowerCase());
+    const matchChip = chipFilter==='All' || a.type===chipFilter || (chipFilter==='Personal' && a.type==='Personal Loan') || (chipFilter==='Auto' && a.type==='Auto Loan') || (chipFilter==='Business' && a.type==='Business Loan') || (chipFilter==='Home Loan' && a.type==='Home Loan');
+    return matchSearch && matchChip;
+  });
 
   const decide = async (decision: string, extra?: any) => {
     if (!selected) return;
@@ -140,7 +145,7 @@ export function LoansQueue() {
       </div>
       <Card>
         <TableToolbar search={search} onSearch={setSearch} placeholder="Application ID · name · loan type…"
-          filters={<div className="flex items-center gap-2">{['All','Home Loan','Personal','Auto','Business'].map((f,i)=><button key={f} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${i===0?C.blue600:C.gray300}`, backgroundColor:i===0?C.blue50:'#fff', color:i===0?C.blue600:C.gray700 }}>{f}</button>)}</div>}
+          filters={<div className="flex items-center gap-2">{['All','Home Loan','Personal','Auto','Business'].map((f)=><button key={f} onClick={()=>setChipFilter(f)} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${f===chipFilter?C.blue600:C.gray300}`, backgroundColor:f===chipFilter?C.blue50:'#fff', color:f===chipFilter?C.blue600:C.gray700 }}>{f}</button>)}</div>}
         />
         <div className="table-scroll-wrap">
           <table className="w-full" style={{ borderCollapse:'collapse', minWidth:900 }}>

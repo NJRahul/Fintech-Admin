@@ -17,9 +17,11 @@ export function AMLSanctions() {
   const [tab, setTab]         = useState<'alerts'|'sar'>('alerts');
   const [loading, setLoading] = useState(false);
   const [disposing, setDisposing] = useState<string|null>(null);
+  const [chipFilter, setChipFilter] = useState('All');
   const [sarDesc, setSarDesc] = useState('Structured cross-border transfers totalling ₹48,00,000 across 12 transactions below ₹4,00,000 each within a 72-hour window, suggesting layering.');
   const [filing, setFiling]   = useState(false);
   const [filed, setFiled]     = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -27,11 +29,16 @@ export function AMLSanctions() {
   };
   useEffect(load, []);
 
-  const filtered = alerts.filter(a =>
-    a.customer?.toLowerCase().includes(search.toLowerCase()) ||
-    a.id?.toLowerCase().includes(search.toLowerCase()) ||
-    a.type?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = alerts.filter(a => {
+    const matchSearch = a.customer?.toLowerCase().includes(search.toLowerCase()) ||
+      a.id?.toLowerCase().includes(search.toLowerCase()) ||
+      a.type?.toLowerCase().includes(search.toLowerCase());
+    const matchChip = chipFilter==='All' ||
+      (chipFilter==='Critical' && a.risk==='Critical') ||
+      (chipFilter==='High' && a.risk==='High') ||
+      (chipFilter==='Open' && a.status==='Open');
+    return matchSearch && matchChip;
+  });
 
   const dispose = async (id: string, action: string) => {
     setDisposing(id);
@@ -69,7 +76,7 @@ export function AMLSanctions() {
       {tab==='alerts' ? (
         <Card>
           <TableToolbar search={search} onSearch={setSearch} placeholder="Alert ID · customer · alert type…"
-            filters={<div className="flex items-center gap-2">{['All','Critical','High','Open'].map((f,i)=><button key={f} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${i===0?C.blue600:C.gray300}`, backgroundColor:i===0?C.blue50:'#fff', color:i===0?C.blue600:C.gray700 }}>{f}</button>)}</div>}
+            filters={<div className="flex items-center gap-2">{['All','Critical','High','Open'].map((f)=><button key={f} onClick={()=>setChipFilter(f)} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${f===chipFilter?C.blue600:C.gray300}`, backgroundColor:f===chipFilter?C.blue50:'#fff', color:f===chipFilter?C.blue600:C.gray700 }}>{f}</button>)}</div>}
           />
           <table className="w-full" style={{ borderCollapse:'collapse' }}>
             <thead><tr><Th>Risk</Th><Th>Alert ID</Th><Th>Customer</Th><Th>Alert type</Th><Th right>Amount</Th><Th>Context</Th><Th>Date</Th><Th>Status</Th><Th></Th></tr></thead>
@@ -128,7 +135,9 @@ export function AMLSanctions() {
                   <button onClick={fileSAR} disabled={filing} className="flex-1 rounded flex items-center justify-center gap-2" style={{ height:40, backgroundColor:C.blue600, color:'#fff', fontSize:14, fontWeight:600 }}>
                     {filing?<><RefreshCw size={14} className="animate-spin"/> Submitting…</>:<><Send size={14} strokeWidth={1.5}/> Submit SAR to FIU-IND</>}
                   </button>
-                  <button className="rounded" style={{ height:40, padding:'0 14px', border:`1px solid ${C.gray300}`, backgroundColor:'#fff', fontSize:14, color:C.gray700 }}>Save draft</button>
+                  <button onClick={()=>{setDraftSaved(true);setTimeout(()=>setDraftSaved(false),3000);}} className="rounded flex items-center gap-1" style={{ height:40, padding:'0 14px', border:`1px solid ${draftSaved?C.success600:C.gray300}`, backgroundColor:draftSaved?'#E9F5EE':'#fff', fontSize:14, color:draftSaved?C.success600:C.gray700 }}>
+                    {draftSaved?<><CheckCircle size={14} strokeWidth={2}/> Saved</>:'Save draft'}
+                  </button>
                 </div>
               </div>
             )}

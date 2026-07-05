@@ -19,6 +19,7 @@ export function Disputes() {
   const [notes, setNotes]       = useState('');
   const [loading, setLoading]   = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [chipFilter, setChipFilter] = useState('All');
 
   const load = () => {
     setLoading(true);
@@ -26,11 +27,15 @@ export function Disputes() {
   };
   useEffect(load, []);
 
-  const filtered = disputes.filter(d =>
-    d.customer?.toLowerCase().includes(search.toLowerCase()) ||
-    d.id?.toLowerCase().includes(search.toLowerCase()) ||
-    d.merchant?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = disputes.filter(d => {
+    const matchSearch = d.customer?.toLowerCase().includes(search.toLowerCase()) ||
+      d.id?.toLowerCase().includes(search.toLowerCase()) ||
+      d.merchant?.toLowerCase().includes(search.toLowerCase());
+    const matchChip = chipFilter==='All' ||
+      (chipFilter==='Open' && d.status==='Open') ||
+      (chipFilter==='Under Investigation' && d.status==='Under Investigation');
+    return matchSearch && matchChip;
+  });
 
   const resolve = async () => {
     if (!selected||!decision) return;
@@ -60,7 +65,7 @@ export function Disputes() {
       <div className="grid gap-4" style={{ gridTemplateColumns:selected?'1fr 420px':'1fr' }}>
         <Card>
           <TableToolbar search={search} onSearch={setSearch} placeholder="Dispute ID · customer · merchant…"
-            filters={<div className="flex items-center gap-2">{['All','Open','Under Investigation'].map((f,i)=><button key={f} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${i===0?C.blue600:C.gray300}`, backgroundColor:i===0?C.blue50:'#fff', color:i===0?C.blue600:C.gray700 }}>{f}</button>)}</div>}
+            filters={<div className="flex items-center gap-2">{['All','Open','Under Investigation'].map((f)=><button key={f} onClick={()=>setChipFilter(f)} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${f===chipFilter?C.blue600:C.gray300}`, backgroundColor:f===chipFilter?C.blue50:'#fff', color:f===chipFilter?C.blue600:C.gray700 }}>{f}</button>)}</div>}
           />
           <table className="w-full" style={{ borderCollapse:'collapse' }}>
             <thead><tr><Th>Dispute ID</Th><Th>Customer</Th><Th>Merchant</Th><Th>Reason</Th><Th right>Amount</Th><Th>Filed</Th><Th>Status</Th><Th></Th></tr></thead>

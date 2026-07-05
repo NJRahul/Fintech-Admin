@@ -16,6 +16,17 @@ export function AuditTrail() {
   const [expanded, setExpanded]     = useState<string|null>(null);
   const [loading, setLoading]       = useState(false);
 
+  const exportCsv = () => {
+    const headers = ['Event ID','When','By','Role','Entity','Reference','Action','Before','After','Branch'];
+    const rows = filtered.map(e => [e.id, fmtDt(e.when), e.who, e.role, e.entity, e.entity_ref, e.action, e.before||'', e.after||'', e.branch]);
+    const csv = [headers, ...rows].map(r => r.map((v:string) => `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type:'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `audit-trail-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const load = (entity = '', who = '', ref = '') => {
     setLoading(true);
     const q = [entity&&`entity=${encodeURIComponent(entity)}`,who&&`who=${encodeURIComponent(who)}`,ref&&`ref=${encodeURIComponent(ref)}`].filter(Boolean).join('&');
@@ -35,7 +46,7 @@ export function AuditTrail() {
     <PageShell title="Audit trail" subtitle="Immutable event log — every state change on every entity. Read-only."
       actions={<div className="flex items-center gap-2">
         <button onClick={()=>load()} className="rounded flex items-center gap-2" style={{ height:40, padding:'0 14px', border:`1px solid ${C.gray300}`, backgroundColor:'#fff', fontSize:14, color:C.gray900 }}><RefreshCw size={14} strokeWidth={1.5}/> Refresh</button>
-        <button className="rounded flex items-center gap-2" style={{ height:40, padding:'0 14px', border:`1px solid ${C.gray300}`, backgroundColor:'#fff', fontSize:14, color:C.gray900 }}><Download size={14} strokeWidth={1.5}/> Export CSV</button>
+        <button onClick={exportCsv} className="rounded flex items-center gap-2" style={{ height:40, padding:'0 14px', border:`1px solid ${C.gray300}`, backgroundColor:'#fff', fontSize:14, color:C.gray900 }}><Download size={14} strokeWidth={1.5}/> Export CSV</button>
       </div>}
     >
       <Card>

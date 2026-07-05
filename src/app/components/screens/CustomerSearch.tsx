@@ -196,6 +196,10 @@ export function CustomerSearch() {
   const [activeTab, setActiveTab] = useState<'accounts'|'transactions'|'kyc'|'alerts'>('accounts');
   const [showNew, setShowNew]     = useState(false);
   const [detail, setDetail]       = useState<any>(null);
+  const [chipFilter, setChipFilter] = useState('All');
+  const [freezingNo, setFreezingNo] = useState<string|null>(null);
+  const [ledgerLoading, setLedgerLoading] = useState<string|null>(null);
+  const [ledgers, setLedgers] = useState<Record<string,any[]>>({});
 
   // Sync with Supabase in background — replace fallback when data arrives
   useEffect(() => {
@@ -209,18 +213,42 @@ export function CustomerSearch() {
     try { const d = await api(`/customers/${c.cif}`); setDetail(d); } catch { setDetail(null); }
   };
 
-  const filtered = customers.filter(c =>
-    c.name?.toLowerCase().includes(search.toLowerCase()) ||
-    c.cif?.toLowerCase().includes(search.toLowerCase()) ||
-    c.pan?.toLowerCase().includes(search.toLowerCase()) ||
-    c.mobile?.includes(search)
-  );
+  const freezeAccount = async (no: string) => {
+    setFreezingNo(no);
+    try {
+      const updated = await api(`/accounts/${no}/toggle-freeze`, 'POST', { officer:'A. Kapoor' });
+      setDetail((d: any) => d ? { ...d, accounts: d.accounts?.map((a: any) => a.no===no ? updated : a) } : d);
+    } finally { setFreezingNo(null); }
+  };
+
+  const viewLedger = async (no: string) => {
+    if (ledgers[no]) return;
+    setLedgerLoading(no);
+    try {
+      const r = await api(`/accounts/${no}/ledger`);
+      setLedgers(prev => ({ ...prev, [no]: r.ledger||[] }));
+    } finally { setLedgerLoading(null); }
+  };
+
+  const filtered = customers.filter(c => {
+    const matchesSearch =
+      c.name?.toLowerCase().includes(search.toLowerCase()) ||
+      c.cif?.toLowerCase().includes(search.toLowerCase()) ||
+      c.pan?.toLowerCase().includes(search.toLowerCase()) ||
+      c.mobile?.includes(search);
+    const matchesChip =
+      chipFilter==='All' ||
+      (chipFilter==='High risk' && c.risk_tier==='High') ||
+      (chipFilter==='KYC pending' && ['Submitted','In Review'].includes(c.kyc_status)) ||
+      (chipFilter==='Flagged' && c.risk_tier==='High' && !['Approved'].includes(c.kyc_status));
+    return matchesSearch && matchesChip;
+  });
 
   return (
     <PageShell title="Customer search" subtitle="Search by name, CIF, PAN, mobile, or account number.">
       <Card>
         <TableToolbar search={search} onSearch={setSearch} placeholder="Name · CIF · PAN · mobile…"
-          filters={<div className="flex items-center gap-2">{['All','High risk','KYC pending','Flagged'].map((f)=><button key={f} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${C.gray300}`, backgroundColor:'#fff', color:C.gray700 }}>{f}</button>)}</div>}
+          filters={<div className="flex items-center gap-2">{['All','High risk','KYC pending','Flagged'].map((f)=><button key={f} onClick={()=>setChipFilter(f)} className="rounded-full" style={{ height:32, padding:'0 12px', fontSize:13, fontWeight:500, border:`1px solid ${f===chipFilter?C.blue600:C.gray300}`, backgroundColor:f===chipFilter?C.blue50:'#fff', color:f===chipFilter?C.blue600:C.gray700 }}>{f}</button>)}</div>}
           action={<button onClick={()=>setShowNew(true)} className="rounded" style={{ height:40, padding:'0 16px', backgroundColor:C.blue600, color:'#fff', fontSize:14, fontWeight:500 }}>+ New customer</button>}
         />
         <div className="table-scroll-wrap">
@@ -303,7 +331,20 @@ export function CustomerSearch() {
                       <StatusBadge label={a.status} variant={a.status==='Active'?'success':a.status==='Frozen'?'danger':'warning'}/>
                     </div>
                     <div className="tabular" style={{ fontSize:20, fontWeight:700, color:C.gray900, marginTop:12 }}>{typeof a.balance==='number'?fmtINR(a.balance):a.balance}</div>
-                    <div className="flex gap-2 mt-3"><CompactBtn>View ledger</CompactBtn><CompactBtn>Freeze</CompactBtn></div>
+                    {ledgers[a.no] && (
+                      <div style={{ marginTop:8, maxHeight:140, overflowY:'auto', borderRadius:6, border:`1px solid ${C.gray200}` }}>
+                        {ledgers[a.no].slice(0,5).map((tx:any,ti:number)=>(
+                          <div key={ti} className="flex items-center justify-between" style={{ padding:'6px 10px', borderBottom:ti<4?`1px solid ${C.gray200}`:'none' }}>
+                            <span style={{ fontSize:12, color:C.gray700 }}>{tx.desc}</span>
+                            <span className="tabular" style={{ fontSize:12, fontWeight:600, color:tx.type==='credit'?C.success600:C.gray900 }}>{tx.type==='credit'?'+':'−'}{typeof tx.amount==='number'?fmtINR(tx.amount):tx.amount}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2 mt-3">
+                      <CompactBtn onClick={()=>viewLedger(a.no)}>{ledgerLoading===a.no?'Loading…':ledgers[a.no]?'Refresh ledger':'View ledger'}</CompactBtn>
+                      <CompactBtn onClick={()=>freezeAccount(a.no)} danger={a.status==='Active'}>{freezingNo===a.no?'…':a.status==='Frozen'?'Unfreeze':'Freeze'}</CompactBtn>
+                    </div>
                   </div>
                 ))}
               </div>
